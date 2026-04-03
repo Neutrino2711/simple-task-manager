@@ -16,11 +16,61 @@
     max-width: 400px;
 }
 
+.auth-box h1 {
+    text-align: center;
+    color: #333;
+    margin-bottom: 10px;
+    font-size: 32px;
+}
+
 .auth-box h2 {
     text-align: center;
     color: #333;
     margin-bottom: 30px;
-    font-size: 28px;
+    font-size: 24px;
+}
+
+.auth-info {
+    text-align: center;
+    margin: 20px 0;
+    color: #666;
+    font-size: 14px;
+}
+
+.auth-button {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    border: none;
+    border-radius: 5px;
+    font-size: 16px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.auth-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+}
+
+.auth-button:active {
+    transform: translateY(0);
+}
+
+.sign-in-button {
+    margin-top: 20px;
+}
+
+.error-message {
+    color: #e74c3c;
+    font-size: 14px;
+    margin-top: 15px;
+    text-align: center;
+    background: #ffe5e5;
+    padding: 10px;
+    border-radius: 5px;
 }
 
 .form-group {

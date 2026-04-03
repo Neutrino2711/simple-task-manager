@@ -1,31 +1,40 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useAuth } from "react-oidc-context";
+import apiService, { setAuthState } from './services/apiService';
 import './Dashboard.css';
 
 export default function Dashboard() {
+    const auth = useAuth();
     const [tasks, setTasks] = useState([]);
     const [taskInput, setTaskInput] = useState('');
-    const [currentUser, setCurrentUser] = useState(null);
-    const navigate = useNavigate();
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState(null);
+    const [showTokens, setShowTokens] = useState(false);
+
+    // Load tasks from API
+    const loadTasks = async () => {
+        try {
+            setError(null);
+            setLoading(true);
+            const fetchedTasks = await apiService.getTasks();
+            setTasks(fetchedTasks);
+        } catch (err) {
+            setError(err.message || 'Failed to load tasks');
+            console.error('Error loading tasks:', err);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        // Check if user is logged in
-        const user = JSON.parse(localStorage.getItem('currentUser') || 'null');
-        if (!user) {
-            navigate('/login');
-            return;
-        }
+        // Set auth state for API service
+        setAuthState(auth);
 
-        setCurrentUser(user);
+        // Load tasks from API
+        loadTasks();
+    }, [auth]);
 
-        // Load tasks for this user
-        const userTasks = JSON.parse(
-            localStorage.getItem(`tasks_${user.id}`) || '[]'
-        );
-        setTasks(userTasks);
-    }, [navigate]);
-
-    const handleAddTask = (e) => {
+    const handleAddTask = async (e) => {
         e.preventDefault();
 
         if (!taskInput.trim()) {
@@ -33,56 +42,108 @@ export default function Dashboard() {
             return;
         }
 
-        const newTask = {
-            id: Date.now().toString(),
-            text: taskInput,
-            completed: false,
-            createdAt: new Date().toLocaleString()
-        };
-
-        const updatedTasks = [...tasks, newTask];
-        setTasks(updatedTasks);
-        localStorage.setItem(`tasks_${currentUser.id}`, JSON.stringify(updatedTasks));
-        setTaskInput('');
+        try {
+            setError(null);
+            const newTask = await apiService.createTask(taskInput);
+            setTasks([...tasks, newTask]);
+            setTaskInput('');
+        } catch (err) {
+            setError(err.message || 'Failed to create task');
+            console.error('Error creating task:', err);
+        }
     };
 
-    const handleRemoveTask = (id) => {
-        const updatedTasks = tasks.filter(task => task.id !== id);
-        setTasks(updatedTasks);
-        localStorage.setItem(`tasks_${currentUser.id}`, JSON.stringify(updatedTasks));
+    const handleRemoveTask = async (id) => {
+        try {
+            setError(null);
+            await apiService.deleteTask(id);
+            setTasks(tasks.filter(task => task.id !== id));
+        } catch (err) {
+            setError(err.message || 'Failed to delete task');
+            console.error('Error deleting task:', err);
+        }
     };
 
-    const handleToggleTask = (id) => {
-        const updatedTasks = tasks.map(task =>
-            task.id === id ? { ...task, completed: !task.completed } : task
-        );
-        setTasks(updatedTasks);
-        localStorage.setItem(`tasks_${currentUser.id}`, JSON.stringify(updatedTasks));
+    const handleToggleTask = async (id) => {
+        try {
+            setError(null);
+            const taskToUpdate = tasks.find(task => task.id === id);
+            if (taskToUpdate) {
+                await apiService.updateTask(id, {
+                    completed: !taskToUpdate.completed
+                });
+                const updatedTasks = tasks.map(task =>
+                    task.id === id ? { ...task, completed: !task.completed } : task
+                );
+                setTasks(updatedTasks);
+            }
+        } catch (err) {
+            setError(err.message || 'Failed to update task');
+            console.error('Error updating task:', err);
+        }
     };
 
-    const handleLogout = () => {
-        localStorage.removeItem('currentUser');
-        navigate('/login');
+    const handleLogout = async () => {
+        try {
+            await auth.removeUser();
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
     };
 
-    if (!currentUser) {
-        return <div className="loading">Loading...</div>;
+    if (loading) {
+        return <div className="loading">Loading your tasks...</div>;
     }
 
     const completedCount = tasks.filter(t => t.completed).length;
+    const userEmail = auth.user?.profile?.email || 'User';
+    const userName = auth.user?.profile?.name || userEmail;
 
     return (
         <div className="dashboard-container">
             <header className="dashboard-header">
                 <div className="header-content">
-                    <h1>Welcome, {currentUser.name}! 👋</h1>
-                    <button onClick={handleLogout} className="btn-logout">
-                        Logout
-                    </button>
+                    <h1>Welcome, {userName}! 👋</h1>
+                    <div className="header-actions">
+                        <button
+                            onClick={() => setShowTokens(!showTokens)}
+                            className="btn-info"
+                            title="Toggle authentication details"
+                        >
+                            ℹ️ Auth Info
+                        </button>
+                        <button onClick={handleLogout} className="btn-logout">
+                            Sign Out
+                        </button>
+                    </div>
                 </div>
+
+                {showTokens && (
+                    <div className="auth-details">
+                        <div className="detail-item">
+                            <span className="detail-label">Email:</span>
+                            <span className="detail-value">{userEmail}</span>
+                        </div>
+                        <div className="detail-item">
+                            <span className="detail-label">Access Token:</span>
+                            <span className="detail-value mono">{auth.user?.access_token?.substring(0, 30)}...</span>
+                        </div>
+                        <div className="detail-item">
+                            <span className="detail-label">ID Token:</span>
+                            <span className="detail-value mono">{auth.user?.id_token?.substring(0, 30)}...</span>
+                        </div>
+                    </div>
+                )}
             </header>
 
             <div className="dashboard-content">
+                {error && (
+                    <div className="error-banner">
+                        <p>❌ {error}</p>
+                        <button onClick={loadTasks} className="btn-retry">Retry</button>
+                    </div>
+                )}
+
                 <div className="stats">
                     <div className="stat-box">
                         <span className="stat-label">Total Tasks</span>
